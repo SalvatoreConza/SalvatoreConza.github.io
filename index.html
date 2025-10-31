@@ -241,9 +241,7 @@
                 "I have studied Mechanical Engineering in my Bachelor and Mathematical Engineering and Mathematics in my Master",
                 "My goal is to learn and to solve complex problem in Machine Learning."
             ],
-            'github': [
-                "https://github.com/SalvatoreConza"
-            ],
+            'github': ["https://github.com/SalvatoreConza"],
             'projects': [
             "Bachelor thesis on modelling of heating of nanolayer with different boundary conditions",
             "Matlab projects on Principal Component Analysis, Iterative Methods and Singular Value Decomposition",
@@ -269,8 +267,8 @@
                 "Programming Languages & Skills:",
                 "--------------------",
                 "Languages:  Python, HTML, C, Matlab",
-                "Master degree relevant courseworks: Real, Functional and Complex Analysis",
-                "Hamiltonian Mechanics, Nonlinear Sistems, Mathematical Mdelling, Numerical methods",
+                "Master degree relevant courseworks: Real, Functional and Complex Analysis,",
+                "Hamiltonian Mechanics, Nonlinear Sistems, Mathematical Mdelling, Numerical methods,",
                 "Continuum Mechanics, Quantuum Mechanics, Thermodinamics, Machine Learning", 
                 "Tools: Docker, Git "
             ],
@@ -294,22 +292,36 @@
         const gameCommands = {
             'about': {
                 pokemon: "Arceus",
+                output: [
+                    "You believe you can bring down the creator?"
+                ]
             },
             'github': {
                 pokemon: "Eevee",
+                output: "Eeeeevee"
             },
             'projects': {
                 pokemon: "Mewtwo",
+                output: "Behold my powers. I am the strongest Pokémon in the world"
             },
             /* REMOVED 'social' (Meowth) command object */
             'contacts': { // Galvantula
                 pokemon: "Galvantula",
+                output: [
+                    "bzzzz"
+                ]
             },
             'papers': {
                 pokemon: "Alakazam",
+                output: [
+                    "I foresee victory."
+                ]
             },
             'skills': {
                 pokemon: "Porygon",
+                output: [
+                    "1000101010111000"
+                ]
             },
             'help': {
                 pokemon: null,
@@ -393,6 +405,7 @@
                         terminalOutput.innerHTML = '';
                         return;
                     }
+
                     if (Array.isArray(command)) {
                         command.forEach(line => printToTerminal(line, 'text-gray-300'));
                     } else {
@@ -431,10 +444,8 @@
                 // Process the command's main action
                 if (input === 'github') {
                     printToTerminal(output, 'text-gray-300');
-                    window.open('https://github.com/YOUR_USERNAME', '_blank');
                 } else if (input === 'projects') {
                     printToTerminal(output, 'text-gray-300');
-                    window.open('https://github.com/YOUR_USERNAME?tab=repositories', '_blank');
                 } else if (Array.isArray(output)) {
                     output.forEach(line => printToTerminal(line, 'text-gray-300'));
                 } else {
@@ -982,6 +993,3 @@
     </script>
 </body>
 </html>
-
-
-
