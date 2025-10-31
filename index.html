@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Introduction</title>
+    <!-- Imports Tailwind CSS for styling --><script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the terminal */
+        
+        /* Use a monospace font from Google Fonts for the terminal feel */
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Custom scrollbar for the terminal body */
+        #terminal-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        #terminal-output::-webkit-scrollbar-track {
+            background: #1f2937; /* bg-gray-800 */
+        }
+        #terminal-output::-webkit-scrollbar-thumb {
+            background: #4b5563; /* bg-gray-600 */
+            border-radius: 4px;
+        }
+        #terminal-output::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; /* bg-gray-500 */
+        }
+
+        /* Hide the default input focus ring */
+        #command-input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        
+        /* Blinking cursor effect */
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2em;
+            background-color: #f3f4f6; /* bg-gray-100 */
+            animation: blink 1s step-end infinite;
+            margin-left: 2px;
+            transform: translateY(4px);
+        }
+
+        @keyframes blink {
+            from, to {
+                background-color: transparent;
+            }
+            50% {
+                background-color: #f3f4f6; /* bg-gray-100 */
+            }
+        }
+        
+        /* Class for the ASCII art */
+        .ascii-art {
+            white-space: pre; /* This is CRITICAL to keep the art's shape */
+            font-size: 8px;   /* Make font small to fit art */
+            line-height: 8px; /* Tighten line spacing */
+            letter-spacing: 1px;
+            font-family: 'Fira Code', monospace;
+            color: #ccc; /* Make it a bit dimmer */
+            overflow: hidden; /* Prevent weird wrapping */
+            text-align: center; /* Center the art */
+        }
+
+        /* NEW: Specific styles for battle art panes */
+        #player-art, #enemy-art { /* Apply to both */
+            /* REMOVED: color: #22d3ee; */ /* Color will be applied inline by JavaScript */
+            /* width: 48%; */ /* REMOVED: Let flexbox handle width based on content */
+            font-size: 10px; /* Increased font size for battle art */
+            line-height: 10px; /* Adjust line height to match new font size */
+        }
+        /* REMOVED: #enemy-art rule */
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-300 flex items-center justify-center h-screen p-4">
+
+    <!-- Terminal Window --><div id="terminal-window" class="w-full max-w-7xl h-[98vh] bg-black/80 backdrop-blur-md rounded-lg shadow-2xl flex flex-col overflow-hidden border border-gray-700">
+
+        <!-- Terminal Header --><div class="bg-gray-800 p-3 flex items-center border-b border-gray-700">
+            <!-- Window control dots --><div class="flex space-x-2">
+                <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+                <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
+                <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+            </div>
+            <span class="ml-auto text-sm text-gray-400">bash - my-portfolio</span>
+        </div>
+
+        <!-- NEW: Battle Art Display --><!-- This area is hidden by default and will be shown during battle --><div id="battle-art-display" class="w-full p-2 border-b border-gray-700" style="display: none;">
+            <div class="flex justify-around w-full">
+                <pre id="player-art" class="ascii-art"></pre>
+                <pre id="enemy-art" class="ascii-art"></pre>
+            </div>
+        </div>
+
+        <!-- Terminal Body (Output) --><div id="terminal-output" class="flex-grow p-4 overflow-y-auto text-sm leading-relaxed">
+            <!-- JavaScript will populate this area --></div>
+
+        <!-- Input Area --><div class="p-4 border-t border-gray-700 flex items-center">
+            <span id="prompt-prefix" class="text-green-400">guest@portfolio:~$</span>
+            <input type="text" id="command-input" class="flex-grow bg-transparent text-white ml-2" autofocus autocomplete="off" autocapitalize="none" autocorrect="off">
+            <!-- <span class="cursor"></span> --></div>
+    </div>
+
+    <script>
+        const terminalOutput = document.getElementById('terminal-output');
+        const commandInput = document.getElementById('command-input');
+        const terminalWindow = document.getElementById('terminal-window');
+        const promptPrefix = document.getElementById('prompt-prefix');
+        // NEW: Get art display elements
+        const battleArtDisplay = document.getElementById('battle-art-display');
+        const playerArtEl = document.getElementById('player-art');
+        const enemyArtEl = document.getElementById('enemy-art');
+
+
+        // === GLOBAL STATE ===
+        let state = 'init'; // 'init', 'menu', 'game_menu', 'battle'
+        
+        // --- Game State ---
+        let gameCommandCounter = 0;
+        let playerTeam = [];
+        let enemyTeam = [];
+        
+        // --- Battle State ---
+        let battleState = 'player_turn'; // 'player_turn', 'enemy_turn', 'game_over'
+        let activePlayerPokemonIndex = 0;
+        let activeEnemyPokemonIndex = 0;
+        let currentPlayerPokemon = null;
+        let currentEnemyPokemon = null;
+
+        const welcomeMessage = [
+            "Initializing virtual environment...",
+            "Welcome to my personal terminal.",
+            " ",
+        ];
+        
+        const firstQuestion = "DO YOU WANT TO PLAY? (yes/no)";
+        
+        const asciiRamp = ' .:-=+*#%@'; // Simple ASCII ramp from dark to bright
+
+        // --- Base Stats for all Pokemon ---
+        const pokemonBaseStats = {
+            "Arceus": {
+                baseHp: 300,
+                attribute: "Normal",
+                moveNames: ["Judgment", "Future Sight", "Recover", "Hyper Beam"],
+                moveAttributeOptions: ["Normal", "Psychic"],
+                moveDamage: () => Math.floor(Math.random() * 101), // Random damage 0-100
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/493.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/493.png'
+            },
+            "Eevee": {
+                baseHp: 100,
+                attribute: "Normal",
+                moveNames: ["Quick Attack", "Tackle", "Bite", "Swift"],
+                moveAttributeOptions: ["Normal"], // Only one option
+                moveDamage: () => Math.floor(Math.random() * 81), // Random damage 0-80
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/133.png'
+            },
+            "Mewtwo": {
+                baseHp: 250,
+                attribute: "Psychic", 
+                moveNames: ["Psystrike", "Aura Sphere", "Shadow Ball", "Barrier"],
+                moveAttributeOptions: ["Normal", "Psychic"],
+                moveDamage: () => Math.floor(Math.random() * 121), // Random damage 0-120
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/150.png'
+            },
+            "Galvantula": {
+                baseHp: 120,
+                attribute: "Electric",
+                moveNames: ["Electro Ball", "Bug Buzz", "Signal Beam", "Agility"],
+                moveAttributeOptions: ["Electric", "Grass"], 
+                moveDamage: () => Math.floor(Math.random() * 81), // Random damage 0-80
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/596.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/596.png'
+            },
+            "Alakazam": {
+                baseHp: 175,
+                attribute: "Psychic",
+                moveNames: ["Psychic", "Focus Blast", "Dazzling Gleam", "Calm Mind"],
+                moveAttributeOptions: ["Psychic"],
+                moveDamage: () => Math.floor(Math.random() * 121), // Random damage 0-120
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/65.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/65.png'
+            },
+            "Porygon": {
+                baseHp: 160,
+                attribute: "Normal",
+                moveNames: ["Tri Attack", "Discharge", "Psybeam", "Conversion"],
+                moveAttributeOptions: ["Normal"],
+                moveDamage: () => Math.floor(Math.random() * 101), // Random damage 0-100
+                imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/137.png',
+                imageUrlBack: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/137.png'
+            },
+            /* REMOVED "Meowth" entry */
+        };
+
+        /**
+         * Creates a new instance of a Pokemon from its base stats.
+         */
+        function createPokemonInstance(name) {
+            const base = pokemonBaseStats[name];
+            if (!base) {
+                console.error(`No base stats found for: ${name}`);
+                return null; // Pokemon not defined yet
+            }
+
+            // Create moves with randomized attributes
+            const instanceMoves = base.moveNames.map(moveName => {
+                const randomAttribute = base.moveAttributeOptions[Math.floor(Math.random() * base.moveAttributeOptions.length)];
+                return {
+                    name: moveName,
+                    attribute: randomAttribute,
+                    getDamage: base.moveDamage // Assign the damage function
+                };
+            });
+
+            return {
+                name: name,
+                hp: base.baseHp,
+                maxHp: base.baseHp,
+                attribute: base.attribute,
+                moves: instanceMoves,
+                isFainted: false
+            };
+        }
+
+
+        // --- All your info goes here (PROFESSIONAL) ---
+        const commands = {
+            'about': [
+                "About Me:",
+                "I'm a Mathematician & Engineer based in Naples. I have also studied in Germany and worked on ML problems in Sweden and Spain.",
+                "I have studied Mechanical Engineering in my Bachelor and Mathematical Engineering and Mathematics in my Master",
+                "My goal is to learn and to solve complex problem in Machine Learning."
+            ],
+            'github': [
+                "https://github.com/SalvatoreConza"
+            ],
+            'projects': [
+            "Bachelor thesis on modelling of heating of nanolayer with different boundary conditions",
+            "Matlab projects on Principal Component Analysis, Iterative Methods and Singular Value Decomposition",
+            "Sweden internship rat pose estimation and detection",
+            "Spain master thesis on wind prediction via AFNO and inpainting",
+            "Google Summer of Code, working on it",
+            "Japan Vulcanus internship, working on it"
+            ],
+            'social': [
+                "Contacts & Socials:",
+                "--------------------",
+                "Email:    s.conza@studenti.unina.it",
+                "Linkedin:  Salvatore Angelo Conza",
+                "Instagram:   @salva_un_conzino"
+            ],
+            'papers': [
+                "Paper Research:",
+                "--------------------",
+                "1. working on in Spain ",
+                "2. working on in Japan "
+            ],
+            'skills': [
+                "Programming Languages & Skills:",
+                "--------------------",
+                "Languages:  Python, HTML, C, Matlab",
+                "Master degree relevant courseworks: Real, Functional and Complex Analysis",
+                "Hamiltonian Mechanics, Nonlinear Sistems, Mathematical Mdelling, Numerical methods",
+                "Continuum Mechanics, Quantuum Mechanics, Thermodinamics, Machine Learning", 
+                "Tools: Docker, Git "
+            ],
+            'help': [
+                "Available commands:",
+                "'about'       - Who am I?",
+                "'github'      - Go to my GitHub profile",
+                "'projects'    - View my projects",
+                "'social'      - Show contacts and social links (aliases: 'contacts')",
+                "'papers'      - View my paper research",
+                "'skills'      - Programming languages I know",
+                "'help'        - Show this list again",
+                "'clear'       - Clear the terminal screen"
+            ],
+            'clear': "Clearing...",
+            'contacts': null, // Alias for 'social'
+        };
+        commands.contacts = commands.social; // Create alias
+
+        // --- All your info goes here (GAME/POKEMON) ---
+        const gameCommands = {
+            'about': {
+                pokemon: "Arceus",
+            },
+            'github': {
+                pokemon: "Eevee",
+            },
+            'projects': {
+                pokemon: "Mewtwo",
+            },
+            /* REMOVED 'social' (Meowth) command object */
+            'contacts': { // Galvantula
+                pokemon: "Galvantula",
+            },
+            'papers': {
+                pokemon: "Alakazam",
+            },
+            'skills': {
+                pokemon: "Porygon",
+            },
+            'help': {
+                pokemon: null,
+                output: [
+                    "Available Pokedex commands:",
+                    "'about'       - About Me - Arceus",
+                    "'github'      - Go to my GitHub - Eevee",
+                    "'projects'    - Go to my projects - Mewtwo",
+                    /* REMOVED 'social' help line */
+                    "'contacts'    - Show contacts/social - Galvantula",
+                    "'papers'      - Paper research - Alakazam",
+                    "'skills'      - Programming languages - Porygon",
+                    "'help'        - Show this list again",
+                    "'clear'       - Clear the terminal screen"
+                ]
+            },
+            'clear': {
+                pokemon: null,
+                    output: "Using Defog..."
+            }
+        };
+
+        // === EVENT LISTENERS ===
+
+        terminalWindow.addEventListener('click', () => {
+            commandInput.focus();
+        });
+
+        commandInput.addEventListener('keydown', async (e) => { // Made this async
+            if (e.key === 'Enter') {
+                const input = commandInput.value.trim().toLowerCase();
+                const promptText = promptPrefix.textContent;
+                const fullCommand = `${promptText} ${commandInput.value}`;
+                
+                printToTerminal(fullCommand, 'text-gray-400');
+                commandInput.value = ''; // Clear input field
+                
+                await processCommand(input); // Added await
+                scrollToBottom();
+            }
+        });
+
+        // === CORE LOGIC ===
+
+        async function processCommand(input) { // Made this async
+            if (state === 'init') {
+                // Initial "DO YOU WANT TO PLAY?" question
+                if (input === 'yes') {
+                    printToTerminal("Welcome, Trainer! Loading Pokedex...", 'text-yellow-300');
+                    
+                    // Disable input while loading art
+                    commandInput.disabled = true; 
+                    promptPrefix.textContent = "loading:~$";
+                    
+                    // Load and display ASCII art
+                    await loadAndDisplayAllArt();
+                    
+                    // Re-enable input
+                    commandInput.disabled = false;
+                    commandInput.focus();
+                    
+                    printToTerminal("Select your team of 3. Type 'help' to see all available commands.", 'text-gray-300');
+                    promptPrefix.textContent = "trainer@portfolio:~$";
+                    promptPrefix.classList.remove("text-green-400");
+                    promptPrefix.classList.add("text-yellow-400");
+                    state = 'game_menu';
+                } else if (input === 'no') {
+                    printToTerminal("Understood. Loading professional profile...", 'text-blue-300');
+                    printToTerminal("Type 'help' to see all available commands.", 'text-gray-300');
+                    state = 'menu';
+                } else {
+                    printToTerminal(`Invalid input. Please type 'yes' or 'no'.`, 'text-red-400');
+                    printToTerminal(firstQuestion, 'text-yellow-300');
+                }
+            } else if (state === 'menu') {
+                // --- Main menu commands ---
+                const command = commands[input];
+                
+                if (command) {
+                    if (input === 'clear') {
+                        terminalOutput.innerHTML = '';
+                        return;
+                    }
+                    if (Array.isArray(command)) {
+                        command.forEach(line => printToTerminal(line, 'text-gray-300'));
+                    } else {
+                        printToTerminal(command, 'text-gray-300');
+                    }
+                } else {
+                    if (input) {
+                        printToTerminal(`Command not found: ${input}. Type 'help' for options.`, 'text-red-400');
+                    }
+                }
+            } else if (state === 'game_menu') {
+                // --- Game menu commands (Team Selection) ---
+                const commandObj = gameCommands[input];
+                
+                if (!commandObj) {
+                    if (input) {
+                        printToTerminal(`Command not found: ${input}. Type 'help' for options.`, 'text-red-400');
+                    }
+                    return;
+                }
+
+                const { pokemon, output } = commandObj;
+
+                // Handle special commands first
+                if (input === 'clear') {
+                    printToTerminal(output, 'text-gray-300');
+                    terminalOutput.innerHTML = '';
+                    return;
+                }
+                
+                if (input === 'help') {
+                    output.forEach(line => printToTerminal(line, 'text-gray-300'));
+                    return;
+                }
+
+                // Process the command's main action
+                if (input === 'github') {
+                    printToTerminal(output, 'text-gray-300');
+                    window.open('https://github.com/YOUR_USERNAME', '_blank');
+                } else if (input === 'projects') {
+                    printToTerminal(output, 'text-gray-300');
+                    window.open('https://github.com/YOUR_USERNAME?tab=repositories', '_blank');
+                } else if (Array.isArray(output)) {
+                    output.forEach(line => printToTerminal(line, 'text-gray-300'));
+                } else {
+                    printToTerminal(output, 'text-gray-300');
+                }
+
+                // Handle Team Logic
+                if (pokemon && gameCommandCounter < 3) {
+                    if (playerTeam.find(p => p.name === pokemon)) {
+                        printToTerminal(`- ${pokemon} is already on your team! -`, 'text-yellow-400');
+                    } else {
+                        const newPokemon = createPokemonInstance(pokemon);
+                        if (newPokemon) {
+                            playerTeam.push(newPokemon);
+                            gameCommandCounter++;
+                            printToTerminal(`- ${newPokemon.name} was added to your team! [${gameCommandCounter}/3] -`, 'text-cyan-400');
+                        } else {
+                            printToTerminal(`- Stats for ${pokemon} are not defined yet. -`, 'text-red-400');
+                        }
+                    }
+                }
+
+                // Check for Battle Start
+                if (gameCommandCounter === 3) {
+                    printToTerminal(" ", 'text-gray-300');
+                    printToTerminal("Your team is full!", 'text-green-400 font-bold');
+                    const playerTeamNames = playerTeam.map(p => p.name).join(', ');
+                    printToTerminal(`Your team: [${playerTeamNames}]`, 'text-cyan-400');
+
+                    // Determine enemy team
+                    const allPokemonNames = Object.values(gameCommands)
+                        .map(cmd => cmd.pokemon)
+                        .filter(name => name !== null); 
+                    
+                    const uniquePokemonNames = [...new Set(allPokemonNames)]; // Handle duplicates
+
+                    const enemyTeamNames = uniquePokemonNames.filter(name => !playerTeam.map(p => p.name).includes(name));
+
+                    enemyTeam = enemyTeamNames.map(name => createPokemonInstance(name)).filter(p => p !== null);
+
+                    const enemyTeamDisplayNames = enemyTeam.map(p => p.name).join(', ');
+                    printToTerminal(`Your opponent's team: [${enemyTeamDisplayNames}]`, 'text-orange-400');
+                    
+                    printToTerminal("...", 'text-gray-300');
+                    
+                    // Transition to battle
+                    state = 'battle';
+                    battleState = 'player_turn'; // Set initial turn
+                    promptPrefix.textContent = "battle@portfolio:~$";
+                    promptPrefix.classList.remove("text-yellow-400");
+                    promptPrefix.classList.add("text-red-500");
+                    gameCommandCounter = 4; // Prevent this block from re-running
+                    
+                    await startBattle(); // Make this async
+                }
+
+            } else if (state === 'battle') {
+                // --- Battle commands ---
+                if (battleState === 'game_over') {
+                    if (input === 'reset') {
+                        resetGame();
+                    } else {
+                        printToTerminal("The battle is over. Type 'reset' to play again.", 'text-yellow-300');
+                    }
+                    return;
+                }
+
+                if (battleState !== 'player_turn') {
+                    printToTerminal("It's not your turn!", 'text-red-400');
+                    return;
+                }
+
+                if (input === 'reset') {
+                    resetGame();
+                    return;
+                }
+                
+                if (input === 'help') {
+                    printToTerminal("Battle Commands:", 'text-gray-300');
+                    printToTerminal("'moves'  - List your active Pokemon's moves", 'text-gray-300');
+                    printToTerminal("'status' - Show current HP for both Pokemon", 'text-gray-300');
+                    printToTerminal("'1'-'4'  - Use the corresponding move", 'text-gray-300');
+                    printToTerminal("'reset'  - Restart the entire experience", 'text-gray-300');
+                    return;
+                }
+                
+                if (input === 'moves') {
+                    listMoves();
+                    return;
+                }
+                
+                if (input === 'status') {
+                    listStatus();
+                    return;
+                }
+
+                const moveIndex = parseInt(input) - 1;
+                if (moveIndex >= 0 && moveIndex < 4) {
+                    // Player's turn
+                    executeTurn(currentPlayerPokemon, currentEnemyPokemon, moveIndex);
+                    
+                    // Check for faint *after* player turn
+                    const enemyFainted = await handleFaint(currentEnemyPokemon, 'enemy'); // make async
+                    
+                    // If battle is over, stop
+                    if (battleState === 'game_over') {
+                        return;
+                    }
+
+                    if (enemyFainted) {
+                        promptNextMove(); 
+                        return; // Don't let the (fainted) enemy attack
+                    }
+
+                    // Enemy's turn (if battle not over and enemy didn't faint)
+                    if (battleState !== 'game_over') {
+                        battleState = 'enemy_turn';
+                        commandInput.disabled = true; // Disable input during enemy turn
+                        setTimeout(async () => { // make callback async
+                            executeEnemyTurn();
+                            
+                            // Check for faint *after* enemy turn
+                            await handleFaint(currentPlayerPokemon, 'player'); // make async
+                            
+                            commandInput.disabled = false; // Re-enable input
+                            commandInput.focus();
+
+                            if (battleState === 'game_over') {
+                                return;
+                            }
+                            
+                            promptNextMove();
+                            
+                        }, 1500); // 1.5 second delay
+                    }
+                } else {
+                    printToTerminal("Invalid move. Type 'moves' to see your options or '1'-'4' to attack.", 'text-red-400');
+                }
+            }
+        }
+
+        // === ASCII ART FUNCTIONS ===
+
+        /**
+         * Loads and displays ASCII art for 6 Pokemon in a 3x2 grid.
+         */
+        async function loadAndDisplayAllArt() {
+            const artPokemonTop = ['Arceus', 'Eevee', 'Mewtwo'];
+            const artPokemonBottom = ['Galvantula', 'Alakazam', 'Porygon'];
+            const artWidth = 60; // Width for each ASCII art
+
+            printToTerminal("Loading Pokemon data [###.......]", 'text-gray-500');
+            
+            // --- Generate Top Row ---
+            let topArt = await Promise.all(
+                artPokemonTop.map(name => generateAscii(pokemonBaseStats[name].imageUrl, name, artWidth, true))
+            );
+            
+            printToTerminal("Loading Pokemon data [######....]", 'text-gray-500');
+
+            // --- Generate Bottom Row ---
+            let bottomArt = await Promise.all(
+                artPokemonBottom.map(name => generateAscii(pokemonBaseStats[name].imageUrl, name, artWidth, true))
+            );
+            
+            printToTerminal("Loading Pokemon data [#########.]", 'text-gray-500');
+
+            // --- Print Top Row ---
+            printCombinedArt(topArt);
+            
+            // --- Print Bottom Row ---
+            printCombinedArt(bottomArt);
+            
+            printToTerminal("Load complete.", 'text-gray-500');
+        }
+        
+        /**
+         * Helper function to print 3 ASCII arts side-by-side.
+         */
+        function printCombinedArt(artArray) {
+            const allArtLines = artArray.map(art => art.split('\n'));
+            const maxHeight = Math.max(...allArtLines.map(lines => lines.length));
+            
+            allArtLines.forEach(lines => {
+                const artWidth = lines[0] ? lines[0].length : 0;
+                const blankLine = ' '.repeat(artWidth);
+                while (lines.length < maxHeight) {
+                    lines.push(blankLine);
+                }
+            });
+            
+            for (let i = 0; i < maxHeight; i++) {
+                let combinedLine = allArtLines.map(lines => lines[i] || ' '.repeat(60)).join('  ');
+                printToTerminal(combinedLine, 'ascii-art');
+            }
+        }
+
+
+        /**
+         * Tries to fetch an image and convert it to ASCII art.
+         * NEW: Added 'useColor' parameter.
+         */
+        async function generateAscii(url, fallbackName, maxWidth = 60, useColor = false) {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const image = new Image();
+                image.crossOrigin = 'Anonymous'; 
+                
+                image.src = url;
+                await new Promise((resolve, reject) => {
+                    image.onload = resolve;
+                    image.onerror = (err) => reject(new Error(`Failed to load image for ${fallbackName}`)); 
+                });
+
+                const scale = image.width / maxWidth;
+                const width = maxWidth;
+                const height = Math.floor(image.height / scale / 2.2); // Adjust aspect ratio
+
+                canvas.width = width;
+                canvas.height = height;
+                
+                ctx.drawImage(image, 0, 0, width, height);
+                
+                const imageData = ctx.getImageData(0, 0, width, height).data;
+                
+                let asciiStr = '';
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const i = (y * width + x) * 4;
+                        const a = imageData[i + 3]; // Get the alpha (transparency) channel
+
+                        if (a < 100) { // Check if the pixel is mostly transparent
+                            asciiStr += ' '; // Add a space for transparent pixels
+                        } else {
+                            const r = imageData[i];
+                            const g = imageData[i + 1];
+                            const b = imageData[i + 2];
+                            
+                            const brightness = (0.21 * r + 0.72 * g + 0.07 * b) / 255;
+                            const rampIndex = Math.floor(brightness * (asciiRamp.length - 1));
+                            const char = asciiRamp[rampIndex];
+
+                            if (useColor) {
+                                // Wrap the character in a span with the pixel's actual color
+                                asciiStr += `<span style="color: rgb(${r}, ${g}, ${b})">${char}</span>`;
+                            } else {
+                                // Just add the plain character
+                                asciiStr += char;
+                            }
+                        }
+                    }
+                    asciiStr += '\n'; // Newline at the end of each row
+                }
+                
+                return asciiStr;
+
+            } catch (error) {
+                console.error(error);
+                // IMPROVED FALLBACK:
+                // Create a fallback text block that matches the dimensions
+                const fallbackText = `[ Art for ${fallbackName} failed ]`;
+                const padding = Math.floor((maxWidth - fallbackText.length) / 2);
+                const centeredText = ' '.repeat(Math.max(0, padding)) + fallbackText;
+                
+                let fallbackArt = '\n'.repeat(Math.floor(height / 2) - 1); // Center vertically
+                fallbackArt += centeredText + '\n';
+                fallbackArt += '\n'.repeat(Math.ceil(height / 2) - 1);
+                
+                return fallbackArt;
+            }
+        }
+        
+        /**
+         * Generates and sets the ASCII art for a battling Pokemon.
+         * Increased maxWidth to 60 for bigger battle art.
+         * NEW: Now uses innerHTML to render colors.
+         */
+        async function setPokemonArt(pokemon, team) {
+            const el = (team === 'player') ? playerArtEl : enemyArtEl;
+            
+            // NEW: Select URL based on team
+            const baseStats = pokemonBaseStats[pokemon.name];
+            // Use the back sprite for the player, front sprite for the enemy
+            const url = (team === 'player') ? baseStats.imageUrlBack : baseStats.imageUrl;
+            
+            // Use innerHTML for the placeholder
+            el.innerHTML = `\n\n\nLoading ${pokemon.name}...\n\n\n`; // Placeholder
+            
+            // NEW: Set different widths for player (bigger) and enemy (smaller)
+            const maxWidth = (team === 'player') ? 80 : 40; // Player = 80, Enemy = 40
+            
+            // Generate art with the new width AND 'useColor' set to true
+            const art = await generateAscii(url, pokemon.name, maxWidth, true);
+            
+            // Use innerHTML to render the colored spans
+            el.innerHTML = art;
+        }
+
+
+        // === BATTLE FUNCTIONS ===
+
+        /**
+         * NEW: Generates a text-based HP bar.
+         * @param {number} currentHp - The current HP of the Pokemon.
+         * @param {number} maxHp - The maximum HP of the Pokemon.
+         * @returns {string} - The formatted HP bar string.
+         */
+        function generateHpBar(currentHp, maxHp) {
+            const barWidth = 20; // Width of the bar in characters
+            const percent = Math.max(0, currentHp / maxHp);
+            const filledBlocks = Math.round(percent * barWidth);
+            const emptyBlocks = barWidth - filledBlocks;
+            
+            const bar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+            return `[${bar}] ${currentHp}/${maxHp} HP`;
+        }
+
+        /**
+         * NEW: Prints the HP bar status for both Pokemon with conditional coloring.
+         */
+        function printHpStatus() {
+            // Helper to get color class based on percentage
+            const getHpColorClass = (percent) => {
+                if (percent > 0.66) {
+                    return 'text-green-500'; // > 66%
+                } else if (percent > 0.33) {
+                    return 'text-yellow-500'; // 33% - 66%
+                } else {
+                    return 'text-red-500'; // < 33%
+                }
+            };
+
+            // --- Player HP ---
+            const playerPercent = currentPlayerPokemon.hp / currentPlayerPokemon.maxHp;
+            const playerBar = generateHpBar(currentPlayerPokemon.hp, currentPlayerPokemon.maxHp);
+            const playerHpColorClass = getHpColorClass(playerPercent);
+            
+            const playerP = document.createElement('p');
+            playerP.innerHTML = `<span class="text-cyan-400">Your ${currentPlayerPokemon.name}: </span><span class="${playerHpColorClass}">${playerBar}</span>`;
+            terminalOutput.appendChild(playerP);
+
+            // --- Enemy HP ---
+            const enemyPercent = currentEnemyPokemon.hp / currentEnemyPokemon.maxHp;
+            const enemyBar = generateHpBar(currentEnemyPokemon.hp, currentEnemyPokemon.maxHp);
+            const enemyHpColorClass = getHpColorClass(enemyPercent);
+            
+            const enemyP = document.createElement('p');
+            enemyP.innerHTML = `<span class="text-orange-400">Opponent's ${currentEnemyPokemon.name}: </span><span class="${enemyHpColorClass}">${enemyBar}</span>`;
+            terminalOutput.appendChild(enemyP);
+        }
+
+
+        async function startBattle() { // Make async
+            printToTerminal("LET THE BATTLE BEGIN", 'text-red-500 font-bold text-lg animate-pulse');
+            
+            // Send out first Pokemon
+            activePlayerPokemonIndex = 0;
+            activeEnemyPokemonIndex = 0;
+            currentPlayerPokemon = playerTeam[activePlayerPokemonIndex];
+            currentEnemyPokemon = enemyTeam[activeEnemyPokemonIndex];
+            
+            printToTerminal(`You sent out ${currentPlayerPokemon.name}!`, 'text-cyan-400');
+            printToTerminal(`Opponent sent out ${currentEnemyPokemon.name}!`, 'text-orange-400');
+            
+            // Show art display and load art
+            battleArtDisplay.style.display = 'block';
+            await Promise.all([
+                setPokemonArt(currentPlayerPokemon, 'player'),
+                setPokemonArt(currentEnemyPokemon, 'enemy')
+            ]);
+            
+            printHpStatus(); // Replaces old HP text
+            scrollToBottom(); // Scroll to bottom after art is loaded and status printed
+            promptNextMove();
+        }
+        
+        function promptNextMove() {
+            battleState = 'player_turn';
+            printToTerminal(`What will ${currentPlayerPokemon.name} do? (Type 'moves' to see options)`, 'text-yellow-300');
+        }
+
+        function listMoves() {
+            printToTerminal(`${currentPlayerPokemon.name}'s moves:`, 'text-cyan-400');
+            currentPlayerPokemon.moves.forEach((move, index) => {
+                printToTerminal(`[${index + 1}] ${move.name} (${move.attribute} Type)`, 'text-gray-300');
+            });
+        }
+        
+        function listStatus() {
+             printHpStatus(); // Replaced old logic with new function
+        }
+
+        function executeTurn(attacker, defender, moveIndex) {
+            const move = attacker.moves[moveIndex];
+            const damage = move.getDamage(); // Get random damage from the function
+            
+            defender.hp = Math.max(0, defender.hp - damage); // Apply damage
+            
+            let attackerColor = (attacker === currentPlayerPokemon) ? 'text-cyan-400' : 'text-orange-400';
+
+            printToTerminal(`${attacker.name} used ${move.name}!`, attackerColor);
+            
+            if (damage === 0) {
+                printToTerminal("...but it missed!", 'text-gray-500');
+            } else {
+                printToTerminal(`It hit ${defender.name} for ${damage} damage!`, 'text-gray-300');
+                printHpStatus(); // Replaces old defender HP text
+            }
+        }
+        
+        function executeEnemyTurn() {
+            if (battleState === 'game_over') return;
+            
+            printToTerminal("...", 'text-gray-500');
+            const randomMoveIndex = Math.floor(Math.random() * 4);
+            executeTurn(currentEnemyPokemon, currentPlayerPokemon, randomMoveIndex);
+        }
+        
+        async function handleFaint(pokemon, team) { // Make async
+            if (pokemon.hp <= 0 && !pokemon.isFainted) {
+                pokemon.isFainted = true;
+                let color = (team === 'player') ? 'text-cyan-400' : 'text-orange-400';
+                printToTerminal(`${pokemon.name} fainted!`, `${color} font-bold`);
+                
+                if (team === 'player') {
+                    activePlayerPokemonIndex++; // Move to next Pokemon
+                    if (activePlayerPokemonIndex < playerTeam.length) {
+                        currentPlayerPokemon = playerTeam[activePlayerPokemonIndex];
+                        printToTerminal(`Go, ${currentPlayerPokemon.name}!`, 'text-cyan-400');
+                        // Update player art
+                        await setPokemonArt(currentPlayerPokemon, 'player');
+                        printHpStatus(); // Add status print
+                    } else {
+                        endBattle(false); // Player lost
+                    }
+                } else {
+                    // Enemy Pokemon fainted
+                    activeEnemyPokemonIndex++;
+                    if (activeEnemyPokemonIndex < enemyTeam.length) {
+                        currentEnemyPokemon = enemyTeam[activeEnemyPokemonIndex];
+                        printToTerminal(`Opponent sent out ${currentEnemyPokemon.name}!`, 'text-orange-400');
+                        // Update enemy art
+                        await setPokemonArt(currentEnemyPokemon, 'enemy');
+                        printHpStatus(); // Add status print
+                    } else {
+                        endBattle(true); // Player won
+                    }
+                }
+                return true; // A faint occurred
+            }
+            return false; // No faint
+        }
+
+        function endBattle(playerWon) {
+            battleState = 'game_over';
+            
+            // Hide art display
+            battleArtDisplay.style.display = 'none';
+            
+            if (playerWon) {
+                printToTerminal("You defeated your opponent!", 'text-green-400 font-bold text-lg');
+                printToTerminal("Congratulations! You've proven your skill.", 'text-yellow-300');
+                // Removed the inappropriate links
+            } else {
+                printToTerminal("All your Pokemon fainted!", 'text-red-500 font-bold text-lg');
+                printToTerminal("You blacked out... Better luck next time.", 'text-gray-400');
+            }
+            printToTerminal("Type 'reset' to play again.", 'text-gray-300');
+        }
+
+        function resetGame() {
+            printToTerminal("Restarting terminal...", 'text-gray-400');
+            
+            // Hide and clear art display
+            battleArtDisplay.style.display = 'none';
+            playerArtEl.innerHTML = '';
+            enemyArtEl.innerHTML = '';
+            
+            setTimeout(() => {
+                // Reset all state variables
+                state = 'init';
+                gameCommandCounter = 0;
+                playerTeam = [];
+                enemyTeam = [];
+                
+                battleState = 'player_turn';
+                activePlayerPokemonIndex = 0;
+                activeEnemyPokemonIndex = 0;
+                currentPlayerPokemon = null;
+                currentEnemyPokemon = null;
+
+                promptPrefix.textContent = "guest@portfolio:~$";
+                promptPrefix.classList.remove("text-red-500", "text-yellow-400");
+                promptPrefix.classList.add("text-green-400");
+                
+                terminalOutput.innerHTML = '';
+                initTerminal(); // Re-run the welcome sequence
+            }, 1000);
+        }
+
+        // === UTILITY FUNCTIONS ===
+
+        function printToTerminal(text, cssClass = 'text-gray-300') {
+            const p = document.createElement('p');
+            
+            // Allow HTML for color spans, but sanitize simple text-only commands
+            if (text.includes('<span')) {
+                p.innerHTML = text; // Assumes 'text' is safe HTML (from our color spans)
+            } else {
+                // Sanitize text
+                const sanitizedText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                p.innerHTML = sanitizedText;
+            }
+
+            p.className = cssClass;
+            terminalOutput.appendChild(p);
+        }
+        
+        function scrollToBottom() {
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function initTerminal() {
+            let i = 0;
+            function typeLine() {
+                if (i < welcomeMessage.length) {
+                    printToTerminal(welcomeMessage[i]);
+                    i++;
+                    scrollToBottom();
+                    setTimeout(typeLine, 150);
+                } else {
+                    printToTerminal(firstQuestion, 'text-yellow-300');
+                    commandInput.focus();
+                }
+            }
+            
+            terminalOutput.innerHTML = '';
+            typeLine();
+        }
+
+        // Start the terminal
+        initTerminal();
+    </script>
+</body>
+</html>
+
+
+
