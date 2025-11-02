@@ -54,5 +54,3 @@ The battle is a fully turn-based system with:
     * Type `reset` at any time to restart the entire experience.
 
 ---
-
-*This portfolio was created as a fun, memorable way to showcase both technical skills and a creative personality.*
