@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap');
+        body { font-family: 'Fira Code', monospace; margin: 0; padding: 0; }
+        #terminal-output::-webkit-scrollbar { width: 8px; }
+        #terminal-output::-webkit-scrollbar-track { background: #1f2937; }
+        #terminal-output::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        #terminal-output::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        #command-input:focus { outline: none; box-shadow: none; }
+        .ascii-art {
+            white-space: pre; font-size: 10px; line-height: 10px; letter-spacing: 1px;
+            font-family: 'Fira Code', monospace; color: #ccc; overflow: hidden; text-align: center;
+        }
+        #player-art, #enemy-art { font-size: 10px; line-height: 10px; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        .effectiveness-msg { font-weight: bold; text-shadow: 0 0 6px currentColor; }
+        /* Hexagon Pokéball Animated Background */
+/* Ensure the body doesn't show scrollbars from our oversized background */
+        body { overflow: hidden; }
+
+        /* Hexagon Pokéball Animated Background (Smaller, Rotated, Diagonal) */
+/* Ensure the body doesn't show scrollbars from our oversized background */
+/* Ensure the body doesn't show scrollbars from our oversized background */
+        body { overflow: hidden; }
+
+        /* Hexagon Pokéball Animated Background (Massive Canvas, GPU Accelerated) */
+        body::before {
+            content: "";
+            position: fixed;
+            top: -100vmax; left: -100vmax; 
+            width: 300vmax; height: 300vmax;
+            z-index: -1;
+            
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='86.6' viewBox='0 0 150 86.6'%3E%3Cdefs%3E%3Cg id='pk' opacity='0.15'%3E%3Cpolygon points='-50,0 -25,-43.3 25,-43.3 50,0' fill='%23ef4444'/%3E%3Cpolygon points='-50,0 -25,43.3 25,43.3 50,0' fill='%23ffffff'/%3E%3Cpolygon points='-50,0 -25,-43.3 25,-43.3 50,0 25,43.3 -25,43.3' fill='none' stroke='%23111111' stroke-width='4'/%3E%3Crect x='-48' y='-4' width='96' height='8' fill='%23111111'/%3E%3Ccircle cx='0' cy='0' r='14' fill='%23111111'/%3E%3Ccircle cx='0' cy='0' r='7' fill='%23ffffff'/%3E%3C/g%3E%3C/defs%3E%3Crect width='150' height='86.6' fill='%23111827'/%3E%3Cuse href='%23pk' x='0' y='0'/%3E%3Cuse href='%23pk' x='75' y='43.3'/%3E%3Cuse href='%23pk' x='150' y='0'/%3E%3Cuse href='%23pk' x='0' y='86.6'/%3E%3Cuse href='%23pk' x='150' y='86.6'/%3E%3C/svg%3E");
+            
+            /* Changed 51.96px to an absolute integer 52px to prevent sub-pixel tearing */
+            background-size: 90px 52px;
+            
+            /* Base position */
+            transform: rotate(-45deg) translateX(0);
+            
+            /* Force the browser to process this on the graphics card */
+            will-change: transform;
+            animation: panHexagons 3s linear infinite;
+        }
+
+        /* Animating the transform instead of background-position completely removes the stutter */
+        @keyframes panHexagons {
+            0% { transform: rotate(-45deg) translateX(0); }
+            100% { transform: rotate(-45deg) translateX(90px); }
+        }    
+        </style>
+</head>
+<body class="bg-gray-900 text-gray-300 flex items-center justify-center h-screen p-4">
+<div id="terminal-window" class="w-full max-w-7xl h-[98vh] bg-black/80 backdrop-blur-md rounded-lg shadow-2xl flex flex-col overflow-hidden border border-gray-700">
+    <div class="bg-gray-800 p-3 flex items-center border-b border-gray-700">
+        <div class="flex space-x-2">
+            <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+            <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
+            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+        </div>
+        <span class="ml-auto text-sm text-gray-400">bash - my-portfolio</span>
+    </div>
+    <div id="battle-art-display" class="w-full p-2 border-b border-gray-700" style="display: none;">
+        <div class="flex justify-around w-full">
+            <pre id="player-art" class="ascii-art"></pre>
+            <pre id="enemy-art" class="ascii-art"></pre>
+        </div>
+    </div>
+    <div id="terminal-output" class="flex-grow p-4 overflow-y-auto text-sm leading-relaxed"></div>
+    <div class="p-4 border-t border-gray-700 flex items-center">
+        <span id="prompt-prefix" class="text-green-400">guest@portfolio:~$</span>
+        <input type="text" id="command-input" class="flex-grow bg-transparent text-white ml-2" autofocus autocomplete="off" autocapitalize="none" autocorrect="off">
+    </div>
+</div>
+
+<script>
+const terminalOutput = document.getElementById('terminal-output');
+const commandInput = document.getElementById('command-input');
+const terminalWindow = document.getElementById('terminal-window');
+const promptPrefix = document.getElementById('prompt-prefix');
+const battleArtDisplay = document.getElementById('battle-art-display');
+const playerArtEl = document.getElementById('player-art');
+const enemyArtEl = document.getElementById('enemy-art');
+
+let state = 'init';
+let gameCommandCounter = 0;
+let playerTeam = [];
+let enemyTeam = [];
+let selectedPokemon = [];
+let commandToPokemonMap = {};
+let battleState = 'player_turn';
+let activePlayerPokemonIndex = 0;
+let activeEnemyPokemonIndex = 0;
+let currentPlayerPokemon = null;
+let currentEnemyPokemon = null;
+
+const POKEMON_LEVEL = 50;
+const welcomeMessage = ["Initializing virtual environment...", "Welcome to my personal terminal.", " "];
+const firstQuestion = "DO YOU WANT TO PLAY? (yes/no)";
+const asciiRamp = ' .:-=+*#%@';
+const gameCommandKeys = ['about', 'github', 'projects', 'contacts', 'papers', 'skills'];
+
+const typeColors = {
+    normal:'#A8A77A',fire:'#EE8130',water:'#6390F0',electric:'#F7D02C',
+    grass:'#7AC74C',ice:'#96D9D6',fighting:'#C22E28',poison:'#A33EA1',
+    ground:'#E2BF65',flying:'#A98FF3',psychic:'#F95587',bug:'#A6B91A',
+    rock:'#B6A136',ghost:'#735797',dragon:'#6F35FC',dark:'#705746',
+    steel:'#B7B7CE',fairy:'#D685AD'
+};
+
+const typeChart = {
+    normal:{rock:0.5,ghost:0,steel:0.5},
+    fire:{fire:0.5,water:0.5,grass:2,ice:2,bug:2,rock:0.5,dragon:0.5,steel:2},
+    water:{fire:2,water:0.5,grass:0.5,ground:2,rock:2,dragon:0.5},
+    electric:{water:2,electric:0.5,grass:0.5,ground:0,flying:2,dragon:0.5},
+    grass:{fire:0.5,water:2,grass:0.5,poison:0.5,ground:2,flying:0.5,bug:0.5,rock:2,dragon:0.5,steel:0.5},
+    ice:{fire:0.5,water:0.5,grass:2,ice:0.5,ground:2,flying:2,dragon:2,steel:0.5},
+    fighting:{normal:2,ice:2,poison:0.5,flying:0.5,psychic:0.5,bug:0.5,rock:2,ghost:0,dark:2,steel:2,fairy:0.5},
+    poison:{grass:2,poison:0.5,ground:0.5,rock:0.5,ghost:0.5,steel:0,fairy:2},
+    ground:{fire:2,electric:2,grass:0.5,poison:2,flying:0,bug:0.5,rock:2,steel:2},
+    flying:{electric:0.5,grass:2,fighting:2,bug:2,rock:0.5,steel:0.5},
+    psychic:{fighting:2,poison:2,psychic:0.5,dark:0,steel:0.5},
+    bug:{fire:0.5,grass:2,fighting:0.5,poison:0.5,flying:0.5,psychic:2,ghost:0.5,dark:2,steel:0.5,fairy:0.5},
+    rock:{fire:2,ice:2,fighting:0.5,ground:0.5,flying:2,bug:2,steel:0.5},
+    ghost:{normal:0,psychic:2,ghost:2,dark:0.5},
+    dragon:{dragon:2,steel:0.5,fairy:0},
+    dark:{fighting:0.5,psychic:2,ghost:2,dark:0.5,fairy:0.5},
+    steel:{fire:0.5,water:0.5,electric:0.5,ice:2,rock:2,steel:0.5,fairy:2},
+    fairy:{fire:0.5,fighting:2,poison:0.5,dragon:2,dark:2,steel:0.5}
+};
+
+function getTypeEffectiveness(moveType, defenderTypes) {
+    let m = 1;
+    for (const dt of defenderTypes) { const c = typeChart[moveType]; if (c && c[dt] !== undefined) m *= c[dt]; }
+    return m;
+}
+
+// === 65 POKEMON — real stats, real moves ===
+// [id, name, [types], {hp,atk,def,spa,spd,spe}, [[name,type,power,acc,class],...]]
+const POKEMON_DB = [
+    [3,"Venusaur",["grass","poison"],{hp:80,atk:82,def:83,spa:100,spd:100,spe:80},[["Solar Beam","grass",120,100,"s"],["Sludge Bomb","poison",90,100,"s"],["Earthquake","ground",100,100,"p"],["Body Slam","normal",85,100,"p"]]],
+    [6,"Charizard",["fire","flying"],{hp:78,atk:84,def:78,spa:109,spd:85,spe:100},[["Flamethrower","fire",90,100,"s"],["Air Slash","flying",75,95,"s"],["Dragon Pulse","dragon",85,100,"s"],["Focus Blast","fighting",120,70,"s"]]],
+    [9,"Blastoise",["water"],{hp:79,atk:83,def:100,spa:85,spd:105,spe:78},[["Surf","water",90,100,"s"],["Ice Beam","ice",90,100,"s"],["Flash Cannon","steel",80,100,"s"],["Dark Pulse","dark",80,100,"s"]]],
+    [25,"Pikachu",["electric"],{hp:35,atk:55,def:40,spa:50,spd:50,spe:90},[["Thunderbolt","electric",90,100,"s"],["Iron Tail","steel",100,75,"p"],["Quick Attack","normal",40,100,"p"],["Volt Tackle","electric",120,100,"p"]]],
+    [26,"Raichu",["electric"],{hp:60,atk:90,def:55,spa:90,spd:80,spe:110},[["Thunder","electric",110,70,"s"],["Focus Blast","fighting",120,70,"s"],["Surf","water",90,100,"s"],["Thunderbolt","electric",90,100,"s"]]],
+    [38,"Ninetales",["fire"],{hp:73,atk:76,def:75,spa:81,spd:100,spe:100},[["Flamethrower","fire",90,100,"s"],["Extrasensory","psychic",80,100,"s"],["Dark Pulse","dark",80,100,"s"],["Energy Ball","grass",90,100,"s"]]],
+    [59,"Arcanine",["fire"],{hp:90,atk:110,def:80,spa:100,spd:80,spe:95},[["Flare Blitz","fire",120,100,"p"],["Wild Charge","electric",90,100,"p"],["Extreme Speed","normal",80,100,"p"],["Close Combat","fighting",120,100,"p"]]],
+    [65,"Alakazam",["psychic"],{hp:55,atk:50,def:45,spa:135,spd:95,spe:120},[["Psychic","psychic",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Focus Blast","fighting",120,70,"s"],["Energy Ball","grass",90,100,"s"]]],
+    [68,"Machamp",["fighting"],{hp:90,atk:130,def:80,spa:65,spd:85,spe:55},[["Dynamic Punch","fighting",100,50,"p"],["Stone Edge","rock",100,80,"p"],["Earthquake","ground",100,100,"p"],["Ice Punch","ice",75,100,"p"]]],
+    [76,"Golem",["rock","ground"],{hp:80,atk:120,def:130,spa:55,spd:65,spe:45},[["Earthquake","ground",100,100,"p"],["Stone Edge","rock",100,80,"p"],["Fire Punch","fire",75,100,"p"],["Explosion","normal",250,100,"p"]]],
+    [94,"Gengar",["ghost","poison"],{hp:60,atk:65,def:60,spa:130,spd:75,spe:110},[["Shadow Ball","ghost",80,100,"s"],["Sludge Bomb","poison",90,100,"s"],["Thunderbolt","electric",90,100,"s"],["Focus Blast","fighting",120,70,"s"]]],
+    [112,"Rhydon",["ground","rock"],{hp:105,atk:130,def:120,spa:45,spd:45,spe:40},[["Earthquake","ground",100,100,"p"],["Stone Edge","rock",100,80,"p"],["Megahorn","bug",120,85,"p"],["Hammer Arm","fighting",100,90,"p"]]],
+    [115,"Kangaskhan",["normal"],{hp:105,atk:95,def:80,spa:40,spd:80,spe:90},[["Return","normal",102,100,"p"],["Earthquake","ground",100,100,"p"],["Sucker Punch","dark",70,100,"p"],["Crunch","dark",80,100,"p"]]],
+    [121,"Starmie",["water","psychic"],{hp:60,atk:75,def:85,spa:100,spd:85,spe:115},[["Surf","water",90,100,"s"],["Psychic","psychic",90,100,"s"],["Thunderbolt","electric",90,100,"s"],["Ice Beam","ice",90,100,"s"]]],
+    [130,"Gyarados",["water","flying"],{hp:95,atk:125,def:79,spa:60,spd:100,spe:81},[["Waterfall","water",80,100,"p"],["Earthquake","ground",100,100,"p"],["Ice Fang","ice",65,95,"p"],["Crunch","dark",80,100,"p"]]],
+    [131,"Lapras",["water","ice"],{hp:130,atk:85,def:80,spa:85,spd:95,spe:60},[["Surf","water",90,100,"s"],["Ice Beam","ice",90,100,"s"],["Thunderbolt","electric",90,100,"s"],["Psychic","psychic",90,100,"s"]]],
+    [134,"Vaporeon",["water"],{hp:130,atk:65,def:60,spa:110,spd:95,spe:65},[["Surf","water",90,100,"s"],["Ice Beam","ice",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Signal Beam","bug",75,100,"s"]]],
+    [135,"Jolteon",["electric"],{hp:65,atk:65,def:60,spa:110,spd:95,spe:130},[["Thunderbolt","electric",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Signal Beam","bug",75,100,"s"],["Volt Switch","electric",70,100,"s"]]],
+    [136,"Flareon",["fire"],{hp:65,atk:130,def:60,spa:95,spd:110,spe:65},[["Flare Blitz","fire",120,100,"p"],["Superpower","fighting",120,100,"p"],["Iron Tail","steel",100,75,"p"],["Quick Attack","normal",40,100,"p"]]],
+    [143,"Snorlax",["normal"],{hp:160,atk:110,def:65,spa:65,spd:110,spe:30},[["Body Slam","normal",85,100,"p"],["Earthquake","ground",100,100,"p"],["Crunch","dark",80,100,"p"],["Fire Punch","fire",75,100,"p"]]],
+    [149,"Dragonite",["dragon","flying"],{hp:91,atk:134,def:95,spa:100,spd:100,spe:80},[["Outrage","dragon",120,100,"p"],["Extreme Speed","normal",80,100,"p"],["Earthquake","ground",100,100,"p"],["Fire Punch","fire",75,100,"p"]]],
+    [150,"Mewtwo",["psychic"],{hp:106,atk:110,def:90,spa:154,spd:90,spe:130},[["Psystrike","psychic",100,100,"s"],["Aura Sphere","fighting",80,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Ice Beam","ice",90,100,"s"]]],
+    [157,"Typhlosion",["fire"],{hp:78,atk:84,def:78,spa:109,spd:85,spe:100},[["Eruption","fire",150,100,"s"],["Focus Blast","fighting",120,70,"s"],["Extrasensory","psychic",80,100,"s"],["Thunderbolt","electric",90,100,"s"]]],
+    [160,"Feraligatr",["water"],{hp:85,atk:105,def:100,spa:79,spd:83,spe:78},[["Waterfall","water",80,100,"p"],["Ice Punch","ice",75,100,"p"],["Earthquake","ground",100,100,"p"],["Crunch","dark",80,100,"p"]]],
+    [169,"Crobat",["poison","flying"],{hp:85,atk:90,def:80,spa:70,spd:80,spe:130},[["Brave Bird","flying",120,100,"p"],["Cross Poison","poison",70,100,"p"],["U-turn","bug",70,100,"p"],["Heat Wave","fire",95,90,"s"]]],
+    [181,"Ampharos",["electric"],{hp:90,atk:75,def:85,spa:115,spd:90,spe:55},[["Thunderbolt","electric",90,100,"s"],["Power Gem","rock",80,100,"s"],["Focus Blast","fighting",120,70,"s"],["Dragon Pulse","dragon",85,100,"s"]]],
+    [196,"Espeon",["psychic"],{hp:65,atk:65,def:60,spa:130,spd:95,spe:110},[["Psychic","psychic",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Dazzling Gleam","fairy",80,100,"s"],["Signal Beam","bug",75,100,"s"]]],
+    [197,"Umbreon",["dark"],{hp:95,atk:65,def:110,spa:60,spd:130,spe:65},[["Foul Play","dark",95,100,"p"],["Payback","dark",50,100,"p"],["Body Slam","normal",85,100,"p"],["Psychic","psychic",90,100,"s"]]],
+    [212,"Scizor",["bug","steel"],{hp:70,atk:130,def:100,spa:55,spd:80,spe:65},[["Bullet Punch","steel",40,100,"p"],["X-Scissor","bug",80,100,"p"],["Superpower","fighting",120,100,"p"],["Night Slash","dark",70,100,"p"]]],
+    [214,"Heracross",["bug","fighting"],{hp:80,atk:125,def:75,spa:40,spd:95,spe:85},[["Megahorn","bug",120,85,"p"],["Close Combat","fighting",120,100,"p"],["Stone Edge","rock",100,80,"p"],["Earthquake","ground",100,100,"p"]]],
+    [230,"Kingdra",["water","dragon"],{hp:75,atk:95,def:95,spa:95,spd:95,spe:85},[["Surf","water",90,100,"s"],["Dragon Pulse","dragon",85,100,"s"],["Ice Beam","ice",90,100,"s"],["Flash Cannon","steel",80,100,"s"]]],
+    [245,"Suicune",["water"],{hp:100,atk:75,def:115,spa:90,spd:115,spe:85},[["Surf","water",90,100,"s"],["Ice Beam","ice",90,100,"s"],["Extrasensory","psychic",80,100,"s"],["Signal Beam","bug",75,100,"s"]]],
+    [248,"Tyranitar",["rock","dark"],{hp:100,atk:134,def:110,spa:95,spd:100,spe:61},[["Stone Edge","rock",100,80,"p"],["Crunch","dark",80,100,"p"],["Earthquake","ground",100,100,"p"],["Fire Punch","fire",75,100,"p"]]],
+    [254,"Sceptile",["grass"],{hp:70,atk:85,def:65,spa:105,spd:85,spe:120},[["Leaf Blade","grass",90,100,"p"],["Earthquake","ground",100,100,"p"],["Rock Slide","rock",75,90,"p"],["X-Scissor","bug",80,100,"p"]]],
+    [257,"Blaziken",["fire","fighting"],{hp:80,atk:120,def:70,spa:110,spd:70,spe:80},[["Flare Blitz","fire",120,100,"p"],["High Jump Kick","fighting",130,90,"p"],["Thunder Punch","electric",75,100,"p"],["Stone Edge","rock",100,80,"p"]]],
+    [260,"Swampert",["water","ground"],{hp:100,atk:110,def:90,spa:85,spd:90,spe:60},[["Waterfall","water",80,100,"p"],["Earthquake","ground",100,100,"p"],["Ice Punch","ice",75,100,"p"],["Stone Edge","rock",100,80,"p"]]],
+    [282,"Gardevoir",["psychic","fairy"],{hp:68,atk:65,def:65,spa:125,spd:115,spe:80},[["Psychic","psychic",90,100,"s"],["Moonblast","fairy",95,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Thunderbolt","electric",90,100,"s"]]],
+    [306,"Aggron",["steel","rock"],{hp:70,atk:110,def:180,spa:60,spd:60,spe:50},[["Iron Head","steel",80,100,"p"],["Stone Edge","rock",100,80,"p"],["Earthquake","ground",100,100,"p"],["Aqua Tail","water",90,90,"p"]]],
+    [330,"Flygon",["ground","dragon"],{hp:80,atk:100,def:80,spa:80,spd:80,spe:100},[["Earthquake","ground",100,100,"p"],["Dragon Claw","dragon",80,100,"p"],["Stone Edge","rock",100,80,"p"],["U-turn","bug",70,100,"p"]]],
+    [350,"Milotic",["water"],{hp:95,atk:60,def:79,spa:100,spd:125,spe:81},[["Surf","water",90,100,"s"],["Ice Beam","ice",90,100,"s"],["Dragon Pulse","dragon",85,100,"s"],["Hidden Power","grass",60,100,"s"]]],
+    [373,"Salamence",["dragon","flying"],{hp:95,atk:135,def:80,spa:110,spd:80,spe:100},[["Outrage","dragon",120,100,"p"],["Earthquake","ground",100,100,"p"],["Fire Fang","fire",65,95,"p"],["Aerial Ace","flying",60,100,"p"]]],
+    [376,"Metagross",["steel","psychic"],{hp:80,atk:135,def:130,spa:95,spd:90,spe:70},[["Meteor Mash","steel",90,90,"p"],["Zen Headbutt","psychic",80,90,"p"],["Earthquake","ground",100,100,"p"],["Ice Punch","ice",75,100,"p"]]],
+    [392,"Infernape",["fire","fighting"],{hp:76,atk:104,def:71,spa:104,spd:71,spe:108},[["Flare Blitz","fire",120,100,"p"],["Close Combat","fighting",120,100,"p"],["Thunder Punch","electric",75,100,"p"],["Mach Punch","fighting",40,100,"p"]]],
+    [395,"Empoleon",["water","steel"],{hp:84,atk:86,def:88,spa:111,spd:101,spe:60},[["Surf","water",90,100,"s"],["Flash Cannon","steel",80,100,"s"],["Ice Beam","ice",90,100,"s"],["Grass Knot","grass",80,100,"s"]]],
+    [405,"Luxray",["electric"],{hp:80,atk:120,def:79,spa:95,spd:79,spe:70},[["Wild Charge","electric",90,100,"p"],["Crunch","dark",80,100,"p"],["Ice Fang","ice",65,95,"p"],["Superpower","fighting",120,100,"p"]]],
+    [448,"Lucario",["fighting","steel"],{hp:70,atk:110,def:70,spa:115,spd:70,spe:90},[["Aura Sphere","fighting",80,100,"s"],["Flash Cannon","steel",80,100,"s"],["Dark Pulse","dark",80,100,"s"],["Dragon Pulse","dragon",85,100,"s"]]],
+    [445,"Garchomp",["dragon","ground"],{hp:108,atk:130,def:95,spa:80,spd:85,spe:102},[["Earthquake","ground",100,100,"p"],["Dragon Claw","dragon",80,100,"p"],["Stone Edge","rock",100,80,"p"],["Fire Fang","fire",65,95,"p"]]],
+    [461,"Weavile",["dark","ice"],{hp:70,atk:120,def:65,spa:45,spd:85,spe:125},[["Night Slash","dark",70,100,"p"],["Ice Punch","ice",75,100,"p"],["Low Kick","fighting",60,100,"p"],["Poison Jab","poison",80,100,"p"]]],
+    [466,"Electivire",["electric"],{hp:75,atk:123,def:67,spa:95,spd:85,spe:95},[["Wild Charge","electric",90,100,"p"],["Ice Punch","ice",75,100,"p"],["Cross Chop","fighting",100,80,"p"],["Earthquake","ground",100,100,"p"]]],
+    [467,"Magmortar",["fire"],{hp:75,atk:95,def:67,spa:125,spd:95,spe:83},[["Flamethrower","fire",90,100,"s"],["Thunderbolt","electric",90,100,"s"],["Focus Blast","fighting",120,70,"s"],["Psychic","psychic",90,100,"s"]]],
+    [471,"Glaceon",["ice"],{hp:65,atk:60,def:110,spa:130,spd:95,spe:65},[["Ice Beam","ice",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Signal Beam","bug",75,100,"s"],["Water Pulse","water",60,100,"s"]]],
+    [475,"Gallade",["psychic","fighting"],{hp:68,atk:125,def:65,spa:65,spd:115,spe:80},[["Close Combat","fighting",120,100,"p"],["Zen Headbutt","psychic",80,90,"p"],["Leaf Blade","grass",90,100,"p"],["Night Slash","dark",70,100,"p"]]],
+    [479,"Rotom",["electric","ghost"],{hp:50,atk:50,def:77,spa:95,spd:77,spe:91},[["Thunderbolt","electric",90,100,"s"],["Shadow Ball","ghost",80,100,"s"],["Volt Switch","electric",70,100,"s"],["Dark Pulse","dark",80,100,"s"]]],
+    [497,"Serperior",["grass"],{hp:75,atk:75,def:95,spa:75,spd:95,spe:113},[["Leaf Storm","grass",130,90,"s"],["Dragon Pulse","dragon",85,100,"s"],["Hidden Power","fire",60,100,"s"],["Giga Drain","grass",75,100,"s"]]],
+    [500,"Emboar",["fire","fighting"],{hp:110,atk:123,def:65,spa:100,spd:65,spe:65},[["Flare Blitz","fire",120,100,"p"],["Hammer Arm","fighting",100,90,"p"],["Wild Charge","electric",90,100,"p"],["Head Smash","rock",150,80,"p"]]],
+    [503,"Samurott",["water"],{hp:95,atk:100,def:85,spa:108,spd:70,spe:70},[["Waterfall","water",80,100,"p"],["Megahorn","bug",120,85,"p"],["Ice Beam","ice",90,100,"s"],["Aqua Jet","water",40,100,"p"]]],
+    [530,"Excadrill",["ground","steel"],{hp:110,atk:135,def:60,spa:50,spd:65,spe:88},[["Earthquake","ground",100,100,"p"],["Iron Head","steel",80,100,"p"],["Rock Slide","rock",75,90,"p"],["X-Scissor","bug",80,100,"p"]]],
+    [534,"Conkeldurr",["fighting"],{hp:105,atk:140,def:95,spa:55,spd:65,spe:45},[["Hammer Arm","fighting",100,90,"p"],["Stone Edge","rock",100,80,"p"],["Ice Punch","ice",75,100,"p"],["Thunder Punch","electric",75,100,"p"]]],
+    [571,"Zoroark",["dark"],{hp:60,atk:105,def:60,spa:120,spd:60,spe:105},[["Dark Pulse","dark",80,100,"s"],["Flamethrower","fire",90,100,"s"],["Focus Blast","fighting",120,70,"s"],["U-turn","bug",70,100,"p"]]],
+    [596,"Galvantula",["bug","electric"],{hp:70,atk:77,def:60,spa:97,spd:60,spe:108},[["Thunder","electric",110,70,"s"],["Bug Buzz","bug",90,100,"s"],["Energy Ball","grass",90,100,"s"],["Volt Switch","electric",70,100,"s"]]],
+    [609,"Chandelure",["ghost","fire"],{hp:60,atk:55,def:90,spa:145,spd:90,spe:80},[["Shadow Ball","ghost",80,100,"s"],["Flamethrower","fire",90,100,"s"],["Energy Ball","grass",90,100,"s"],["Psychic","psychic",90,100,"s"]]],
+    [612,"Haxorus",["dragon"],{hp:76,atk:147,def:90,spa:60,spd:70,spe:97},[["Outrage","dragon",120,100,"p"],["Earthquake","ground",100,100,"p"],["Poison Jab","poison",80,100,"p"],["Iron Tail","steel",100,75,"p"]]],
+    [635,"Hydreigon",["dark","dragon"],{hp:92,atk:105,def:90,spa:125,spd:90,spe:98},[["Dark Pulse","dark",80,100,"s"],["Dragon Pulse","dragon",85,100,"s"],["Flamethrower","fire",90,100,"s"],["Flash Cannon","steel",80,100,"s"]]],
+];
+
+function spriteUrl(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`; }
+function spriteBack(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${id}.png`; }
+
+function parsePokemonEntry(entry) {
+    const [id, name, types, stats, movesRaw] = entry;
+    return {
+        id, name, types,
+        stats: { hp: stats.hp, attack: stats.atk, defense: stats.def, spAttack: stats.spa, spDefense: stats.spd, speed: stats.spe },
+        moves: movesRaw.map(([n,t,pw,ac,cl]) => ({ name:n, type:t, power:pw, accuracy:ac, damageClass: cl==='p'?'physical':'special' })),
+        spriteUrl: spriteUrl(id), spriteBack: spriteBack(id)
+    };
+}
+
+function pickRandomPokemon(count) {
+    const shuffled = [...POKEMON_DB].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count).map(parsePokemonEntry);
+}
+
+function createBattleInstance(p) {
+    const hp = Math.floor(((2 * p.stats.hp) * POKEMON_LEVEL / 100) + POKEMON_LEVEL + 10);
+    return { ...p, hp, maxHp: hp, attack: p.stats.attack, defense: p.stats.defense,
+        spAttack: p.stats.spAttack, spDefense: p.stats.spDefense, speed: p.stats.speed, isFainted: false };
+}
+
+function calculateDamage(attacker, defender, move) {
+    if (move.power === 0) return { damage: 0, missed: false, effectiveness: 1, critical: false, isStatus: true };
+    if (Math.random() * 100 > move.accuracy) return { damage: 0, missed: true, effectiveness: 1, critical: false };
+    let a = move.damageClass === 'physical' ? attacker.attack : attacker.spAttack;
+    let d = move.damageClass === 'physical' ? defender.defense : defender.spDefense;
+    let dmg = Math.floor((((2*POKEMON_LEVEL/5+2) * move.power * a / d) / 50) + 2);
+    const crit = Math.random() < 1/16;
+    if (crit) dmg = Math.floor(dmg * 1.5);
+    if (attacker.types.includes(move.type)) dmg = Math.floor(dmg * 1.5);
+    const eff = getTypeEffectiveness(move.type, defender.types);
+    dmg = Math.floor(dmg * eff);
+    dmg = Math.max(1, Math.floor(dmg * ((Math.floor(Math.random()*16)+85)/100)));
+    if (eff === 0) dmg = 0;
+    return { damage: dmg, missed: false, effectiveness: eff, critical: crit };
+}
+
+// === PROFESSIONAL COMMANDS ===
+const commands = {
+    about:["About Me:","I'm a Mathematician & Engineer based in Naples. Studied in Germany, worked on ML in Sweden and Spain.","Mechanical Engineering (BSc), Mathematical Engineering & Mathematics (MSc).","Goal: solve complex problems in Machine Learning."],
+    github:["https://github.com/SalvatoreConza"],
+    projects:["BSc thesis: heating of nanolayer modelling","Matlab: PCA, Iterative Methods, SVD","Sweden internship: rat pose estimation","MSc thesis (Spain): wind prediction via AFNO","Leetcode, deeplearning.AI, GSoC, Vulcanus Japan — in progress"],
+    social:["Contacts & Socials:","--------------------","Email:     s.conza@studenti.unina.it","Linkedin:  Salvatore Angelo Conza","Instagram: @salva_un_conzino"],
+    papers:["Paper Research:","--------------------","1. In progress (Spain)","2. In progress (Japan)"],
+    skills:["Languages: Python, HTML, JS, C, Matlab","Coursework: Analysis, Mechanics, Modelling, ML, QM","Tools: Docker, Git"],
+    help:["Commands: 'about' 'github' 'projects' 'social' 'papers' 'skills' 'help' 'clear'"],
+    clear:"Clearing...", contacts:null
+};
+commands.contacts = commands.social;
+
+// === EVENTS ===
+terminalWindow.addEventListener('click', () => commandInput.focus());
+commandInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+        const input = commandInput.value.trim().toLowerCase();
+        printToTerminal(`${promptPrefix.textContent} ${commandInput.value}`, 'text-gray-400');
+        commandInput.value = '';
+        await processCommand(input);
+        scrollToBottom();
+    }
+});
+
+// === MAIN LOGIC ===
+async function processCommand(input) {
+    if (state === 'init') {
+        if (input === 'yes') {
+            printToTerminal("Welcome, Trainer! Assembling random Pokémon...", 'text-yellow-300');
+            commandInput.disabled = true;
+            promptPrefix.textContent = "loading:~$";
+            selectedPokemon = pickRandomPokemon(6);
+            commandToPokemonMap = {};
+            gameCommandKeys.forEach((k,i) => { commandToPokemonMap[k] = selectedPokemon[i]; });
+            printToTerminal("Generating Pokédex art...", 'text-gray-500');
+            await loadAndDisplayAllArt();
+            commandInput.disabled = false; commandInput.focus();
+            printToTerminal(" ");
+            printToTerminal("Select your team of 3. Type 'help' to see all Pokémon.", 'text-gray-300');
+            promptPrefix.textContent = "trainer@portfolio:~$";
+            promptPrefix.classList.remove("text-green-400");
+            promptPrefix.classList.add("text-yellow-400");
+            state = 'game_menu';
+        } else if (input === 'no') {
+            printToTerminal("Loading professional profile...", 'text-blue-300');
+            printToTerminal("Type 'help' for commands.", 'text-gray-300');
+            state = 'menu';
+        } else {
+            printToTerminal("Please type 'yes' or 'no'.", 'text-red-400');
+            printToTerminal(firstQuestion, 'text-yellow-300');
+        }
+    } else if (state === 'menu') {
+        const c = commands[input];
+        if (c) { if (input==='clear'){terminalOutput.innerHTML='';return;} if(Array.isArray(c))c.forEach(l=>printToTerminal(l));else printToTerminal(c); }
+        else if (input) printToTerminal(`Not found: ${input}. Type 'help'.`, 'text-red-400');
+    } else if (state === 'game_menu') {
+        if (input==='clear'){terminalOutput.innerHTML='';return;}
+        if (input==='help') {
+            printToTerminal("═══ POKÉDEX — Pick 3 for your team ═══", 'text-yellow-400 font-bold');
+            gameCommandKeys.forEach(k => {
+                const p = commandToPokemonMap[k];
+                if (p) {
+                    const ts = p.types.map(t=>t.toUpperCase()).join('/');
+                    printToTerminal(`  '${k.padEnd(10)}' → #${String(p.id).padStart(3,'0')} ${p.name} [${ts}]`);
+                    printToTerminal(`             HP:${p.stats.hp} ATK:${p.stats.attack} DEF:${p.stats.defense} SPA:${p.stats.spAttack} SPD:${p.stats.spDefense} SPE:${p.stats.speed}`, 'text-gray-500');
+                }
+            });
+            printToTerminal("  'help'  /  'clear'"); return;
+        }
+        const pd = commandToPokemonMap[input];
+        if (!pd) { if(input) printToTerminal(`Not found: ${input}. Type 'help'.`, 'text-red-400'); return; }
+        const ts = pd.types.map(t=>t.toUpperCase()).join('/');
+        printToTerminal(`#${String(pd.id).padStart(3,'0')} ${pd.name} [${ts}]`, 'text-cyan-300');
+        printToTerminal(`  HP:${pd.stats.hp} ATK:${pd.stats.attack} DEF:${pd.stats.defense} SPA:${pd.stats.spAttack} SPD:${pd.stats.spDefense} SPE:${pd.stats.speed}`, 'text-gray-400');
+        pd.moves.forEach(m => {
+            const cls = m.damageClass==='physical'?'PHY':'SPE';
+            printToTerminal(`  ▸ ${m.name} [${m.type.toUpperCase()}] ${cls} PWR:${m.power} ACC:${m.accuracy}%`, 'text-gray-500');
+        });
+        if (gameCommandCounter < 3) {
+            if (playerTeam.find(p=>p.name===pd.name)) printToTerminal(`→ ${pd.name} already on team!`, 'text-yellow-400');
+            else { playerTeam.push(createBattleInstance(pd)); gameCommandCounter++; printToTerminal(`→ ${pd.name} joined! [${gameCommandCounter}/3]`, 'text-cyan-400'); }
+        }
+        if (gameCommandCounter === 3) {
+            printToTerminal(" "); printToTerminal("Team full!", 'text-green-400 font-bold');
+            printToTerminal(`Your team: [${playerTeam.map(p=>p.name).join(', ')}]`, 'text-cyan-400');
+            const pn = new Set(playerTeam.map(p=>p.name));
+            enemyTeam = selectedPokemon.filter(p=>!pn.has(p.name)).map(p=>createBattleInstance(p));
+            printToTerminal(`Opponent: [${enemyTeam.map(p=>p.name).join(', ')}]`, 'text-orange-400');
+            state='battle'; battleState='player_turn';
+            promptPrefix.textContent="battle@portfolio:~$";
+            promptPrefix.classList.remove("text-yellow-400"); promptPrefix.classList.add("text-red-500");
+            gameCommandCounter=4; await startBattle();
+        }
+    } else if (state === 'battle') {
+        if (battleState==='game_over'){if(input==='reset')resetGame();else printToTerminal("Type 'reset' to play again.",'text-yellow-300');return;}
+        if (battleState!=='player_turn'){printToTerminal("Not your turn!",'text-red-400');return;}
+        if (input==='reset'){resetGame();return;}
+        if (input==='help'){printToTerminal("'moves' 'status' 'team' '1'-'4' 'reset'");return;}
+        if (input==='moves'){listMoves();return;}
+        if (input==='status'){printBattleStatus();return;}
+        if (input==='team'){printTeamStatus();return;}
+        const mi=parseInt(input)-1;
+        if(mi>=0&&mi<4)await executeBattleRound(mi);
+        else printToTerminal("Type 'moves' or '1'-'4'.",'text-red-400');
+    }
+}
+
+// === ASCII ART ===
+async function loadAndDisplayAllArt() {
+    const top=selectedPokemon.slice(0,3), bot=selectedPokemon.slice(3,6);
+    const w=50;
+    let ta=await Promise.all(top.map(p=>generateAscii(p.spriteUrl,p.name,w,true)));
+    printCombinedArt(ta);
+    printToTerminal(top.map(p=>centerText(`#${p.id} ${p.name}`,w)).join('  '),'text-cyan-300');
+    printToTerminal(" ");
+    let ba=await Promise.all(bot.map(p=>generateAscii(p.spriteUrl,p.name,w,true)));
+    printCombinedArt(ba);
+    printToTerminal(bot.map(p=>centerText(`#${p.id} ${p.name}`,w)).join('  '),'text-cyan-300');
+}
+function centerText(t,w){const p=Math.floor((w-t.length)/2);return ' '.repeat(Math.max(0,p))+t+' '.repeat(Math.max(0,w-p-t.length));}
+function printCombinedArt(arts){
+    const all = arts.map(a => a.split('\n'));
+    const mh = Math.max(...all.map(l => l.length));
+    
+    // Fix: Pad with exactly 50 spaces, ignoring the HTML tag lengths
+    all.forEach(l => { while(l.length < mh) l.push(' '.repeat(50)); });
+    
+    for(let i = 0; i < mh; i++) {
+        printToTerminal(all.map(l => l[i] || ' '.repeat(50)).join('  '), 'ascii-art');
+    }
+}
+async function generateAscii(url, fallback, maxW=60, useColor=false) {
+    try {
+        const c = document.createElement('canvas');
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        const img = new Image();
+        
+        // Fix: Fetch the image as a Blob to prevent Tainted Canvas CORS errors
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Network error");
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () => reject();
+            img.src = objUrl;
+        });
+        
+        const sc = img.width / maxW;
+        const h = Math.floor(img.height / sc / 2.2);
+        c.width = maxW; 
+        c.height = h; 
+        ctx.drawImage(img, 0, 0, maxW, h);
+        
+        const d = ctx.getImageData(0, 0, maxW, h).data; 
+        let s = '';
+        
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < maxW; x++) {
+                const i = (y * maxW + x) * 4;
+                if (d[i + 3] < 100) { 
+                    s += ' '; 
+                } else {
+                    const r = d[i], g = d[i + 1], b = d[i + 2];
+                    const br = (0.21 * r + 0.72 * g + 0.07 * b) / 255;
+                    const ch = asciiRamp[Math.floor(br * (asciiRamp.length - 1))];
+                    s += useColor ? `<span style="color:rgb(${r},${g},${b})">${ch}</span>` : ch;
+                }
+            }
+            s += '\n';
+        }
+        
+        URL.revokeObjectURL(objUrl); // Clean up memory
+        return s;
+    } catch(e) {
+        console.error("Art load failed:", e);
+        return '\n'.repeat(5) + centerText(`[ ${fallback} ]`, maxW) + '\n' + '\n'.repeat(5);
+    }
+}
+async function setPokemonArt(pokemon,team){
+    const el=team==='player'?playerArtEl:enemyArtEl;
+    const url=team==='player'?pokemon.spriteBack:pokemon.spriteUrl;
+    el.innerHTML=`\n\nLoading ${pokemon.name}...\n\n`;
+    const mw=team==='player'?70:40;
+    el.innerHTML=await generateAscii(url,pokemon.name,mw,true);
+}
+
+// === BATTLE UI ===
+function hpBar(c,m){const w=20,p=Math.max(0,c/m),f=Math.round(p*w);return `[${'█'.repeat(f)}${'░'.repeat(w-f)}] ${c}/${m} HP`;}
+function hpCol(p){return p>0.66?'text-green-500':p>0.33?'text-yellow-500':'text-red-500';}
+function printHpStatus(){
+    const pp=currentPlayerPokemon.hp/currentPlayerPokemon.maxHp;
+    const ep=currentEnemyPokemon.hp/currentEnemyPokemon.maxHp;
+    const p1=document.createElement('p');
+    p1.innerHTML=`<span class="text-cyan-400">Your ${currentPlayerPokemon.name}: </span><span class="${hpCol(pp)}">${hpBar(currentPlayerPokemon.hp,currentPlayerPokemon.maxHp)}</span>`;
+    terminalOutput.appendChild(p1);
+    const p2=document.createElement('p');
+    p2.innerHTML=`<span class="text-orange-400">Foe's ${currentEnemyPokemon.name}: </span><span class="${hpCol(ep)}">${hpBar(currentEnemyPokemon.hp,currentEnemyPokemon.maxHp)}</span>`;
+    terminalOutput.appendChild(p2);
+}
+function printBattleStatus(){
+    const ts=t=>t.map(x=>x.toUpperCase()).join('/');
+    printToTerminal(`── YOUR ${currentPlayerPokemon.name.toUpperCase()} [${ts(currentPlayerPokemon.types)}] ──`,'text-cyan-400');
+    const p1=document.createElement('p');p1.innerHTML=`  <span class="${hpCol(currentPlayerPokemon.hp/currentPlayerPokemon.maxHp)}">${hpBar(currentPlayerPokemon.hp,currentPlayerPokemon.maxHp)}</span>`;terminalOutput.appendChild(p1);
+    printToTerminal(`  ATK:${currentPlayerPokemon.attack} DEF:${currentPlayerPokemon.defense} SPA:${currentPlayerPokemon.spAttack} SPD:${currentPlayerPokemon.spDefense} SPE:${currentPlayerPokemon.speed}`,'text-gray-500');
+    printToTerminal(`── FOE'S ${currentEnemyPokemon.name.toUpperCase()} [${ts(currentEnemyPokemon.types)}] ──`,'text-orange-400');
+    const p2=document.createElement('p');p2.innerHTML=`  <span class="${hpCol(currentEnemyPokemon.hp/currentEnemyPokemon.maxHp)}">${hpBar(currentEnemyPokemon.hp,currentEnemyPokemon.maxHp)}</span>`;terminalOutput.appendChild(p2);
+    printToTerminal(`  ATK:${currentEnemyPokemon.attack} DEF:${currentEnemyPokemon.defense} SPA:${currentEnemyPokemon.spAttack} SPD:${currentEnemyPokemon.spDefense} SPE:${currentEnemyPokemon.speed}`,'text-gray-500');
+}
+function printTeamStatus(){
+    printToTerminal("═══ YOUR TEAM ═══",'text-cyan-400 font-bold');
+    playerTeam.forEach(p=>{const s=p.isFainted?'✗ FAINTED':`${p.hp}/${p.maxHp} HP`;const a=p===currentPlayerPokemon?' ◄':'';
+        printToTerminal(`  ${p.name} [${p.types.map(t=>t.toUpperCase()).join('/')}] — ${s}${a}`,p.isFainted?'text-gray-600':'text-cyan-300');});
+    printToTerminal("═══ FOE'S TEAM ═══",'text-orange-400 font-bold');
+    enemyTeam.forEach(p=>{const s=p.isFainted?'✗ FAINTED':`${p.hp}/${p.maxHp} HP`;const a=p===currentEnemyPokemon?' ◄':'';
+        printToTerminal(`  ${p.name} [${p.types.map(t=>t.toUpperCase()).join('/')}] — ${s}${a}`,p.isFainted?'text-gray-600':'text-orange-300');});
+}
+
+async function startBattle(){
+    printToTerminal("═══════════════════════════════════",'text-red-500');
+    printToTerminal("       LET THE BATTLE BEGIN",'text-red-500 font-bold text-lg');
+    printToTerminal("═══════════════════════════════════",'text-red-500');
+    activePlayerPokemonIndex=0;activeEnemyPokemonIndex=0;
+    currentPlayerPokemon=playerTeam[0];currentEnemyPokemon=enemyTeam[0];
+    printToTerminal(`Go, ${currentPlayerPokemon.name}!`,'text-cyan-400');
+    printToTerminal(`Foe sent out ${currentEnemyPokemon.name}!`,'text-orange-400');
+    battleArtDisplay.style.display='block';
+    await Promise.all([setPokemonArt(currentPlayerPokemon,'player'),setPokemonArt(currentEnemyPokemon,'enemy')]);
+    printHpStatus();scrollToBottom();promptNextMove();
+}
+function promptNextMove(){battleState='player_turn';printToTerminal(`What will ${currentPlayerPokemon.name} do? ('moves' or '1'-'4')`,'text-yellow-300');}
+function listMoves(){
+    printToTerminal(`${currentPlayerPokemon.name}'s moves:`,'text-cyan-400');
+    currentPlayerPokemon.moves.forEach((m,i)=>{
+        const tc=typeColors[m.type]||'#ccc',cls=m.damageClass==='physical'?'PHY':'SPE';
+        const p=document.createElement('p');
+        p.innerHTML=`  [${i+1}] <span style="color:${tc};font-weight:bold;">${m.name}</span> <span class="text-gray-500">| ${m.type.toUpperCase()} | ${cls} | PWR:${m.power} | ACC:${m.accuracy}%</span>`;
+        terminalOutput.appendChild(p);
+    });
+}
+
+async function executeBattleRound(pmi){
+    const pm=currentPlayerPokemon.moves[pmi];
+    const emi=Math.floor(Math.random()*4), em=currentEnemyPokemon.moves[emi];
+    const pFirst=currentPlayerPokemon.speed>currentEnemyPokemon.speed||(currentPlayerPokemon.speed===currentEnemyPokemon.speed&&Math.random()>0.5);
+    const f=pFirst?{a:currentPlayerPokemon,d:currentEnemyPokemon,m:pm,t:'player'}:{a:currentEnemyPokemon,d:currentPlayerPokemon,m:em,t:'enemy'};
+    const s=pFirst?{a:currentEnemyPokemon,d:currentPlayerPokemon,m:em,t:'enemy'}:{a:currentPlayerPokemon,d:currentEnemyPokemon,m:pm,t:'player'};
+    if(!pFirst) printToTerminal(`${currentEnemyPokemon.name} is faster! (SPE ${currentEnemyPokemon.speed} vs ${currentPlayerPokemon.speed})`,'text-orange-400');
+    commandInput.disabled=true;
+    executeAttack(f.a,f.d,f.m,f.t);
+    if(await handleFaint(f.d,f.t==='player'?'enemy':'player')){commandInput.disabled=false;commandInput.focus();if(battleState!=='game_over')promptNextMove();return;}
+    await delay(1200);
+    executeAttack(s.a,s.d,s.m,s.t);
+    if(await handleFaint(s.d,s.t==='player'?'enemy':'player')){commandInput.disabled=false;commandInput.focus();if(battleState!=='game_over')promptNextMove();return;}
+    commandInput.disabled=false;commandInput.focus();
+    printToTerminal("─────────────────",'text-gray-700');printHpStatus();promptNextMove();
+}
+
+function executeAttack(atk,def,move,team){
+    const cc=team==='player'?'text-cyan-400':'text-orange-400',tc=typeColors[move.type]||'#ccc';
+    const p=document.createElement('p');p.className=cc;
+    p.innerHTML=`${atk.name} used <span style="color:${tc};font-weight:bold;">${move.name}</span>!`;
+    terminalOutput.appendChild(p);scrollToBottom();
+    const r=calculateDamage(atk,def,move);
+    if(r.isStatus){printToTerminal(`${atk.name} used a status move!`,'text-gray-400');return;}
+    if(r.missed){printToTerminal("...but it missed!",'text-gray-500');return;}
+    if(r.effectiveness===0){printToTerminal("It had no effect...",'text-gray-600 font-bold');return;}
+    def.hp=Math.max(0,def.hp-r.damage);
+    if(r.effectiveness>1)printToTerminal("It's super effective!",'text-green-400 effectiveness-msg');
+    else if(r.effectiveness<1)printToTerminal("It's not very effective...",'text-yellow-600');
+    if(r.critical)printToTerminal("A critical hit!",'text-yellow-300 font-bold');
+    printToTerminal(`${def.name} took ${r.damage} damage!`);scrollToBottom();
+}
+
+async function handleFaint(pokemon,team){
+    if(pokemon.hp>0||pokemon.isFainted)return false;
+    pokemon.isFainted=true;
+    printToTerminal(`${pokemon.name} fainted!`,`${team==='player'?'text-cyan-400':'text-orange-400'} font-bold`);
+    if(team==='player'){
+        activePlayerPokemonIndex++;
+        if(activePlayerPokemonIndex<playerTeam.length){
+            currentPlayerPokemon=playerTeam[activePlayerPokemonIndex];
+            printToTerminal(`Go, ${currentPlayerPokemon.name}!`,'text-cyan-400');
+            await setPokemonArt(currentPlayerPokemon,'player');printHpStatus();
+        }else endBattle(false);
+    }else{
+        activeEnemyPokemonIndex++;
+        if(activeEnemyPokemonIndex<enemyTeam.length){
+            currentEnemyPokemon=enemyTeam[activeEnemyPokemonIndex];
+            printToTerminal(`Foe sent out ${currentEnemyPokemon.name}!`,'text-orange-400');
+            await setPokemonArt(currentEnemyPokemon,'enemy');printHpStatus();
+        }else endBattle(true);
+    }
+    return true;
+}
+
+function endBattle(won){
+    battleState='game_over';battleArtDisplay.style.display='none';
+    if(won){
+        printToTerminal("═══════════════════════════════════",'text-green-400');
+        printToTerminal("           YOU WIN!",'text-green-400 font-bold text-lg');
+        printToTerminal("═══════════════════════════════════",'text-green-400');
+        printToTerminal("Congratulations, Trainer!",'text-yellow-300');
+    }else{
+        printToTerminal("═══════════════════════════════════",'text-red-500');
+        printToTerminal("        YOU BLACKED OUT...",'text-red-500 font-bold text-lg');
+        printToTerminal("═══════════════════════════════════",'text-red-500');
+        printToTerminal("Better luck next time.",'text-gray-400');
+    }
+    printToTerminal("Type 'reset' for new random Pokémon!",'text-gray-300');
+}
+
+function resetGame(){
+    printToTerminal("Restarting...",'text-gray-400');
+    battleArtDisplay.style.display='none';playerArtEl.innerHTML='';enemyArtEl.innerHTML='';
+    setTimeout(()=>{
+        state='init';gameCommandCounter=0;playerTeam=[];enemyTeam=[];selectedPokemon=[];
+        commandToPokemonMap={};battleState='player_turn';activePlayerPokemonIndex=0;
+        activeEnemyPokemonIndex=0;currentPlayerPokemon=null;currentEnemyPokemon=null;
+        promptPrefix.textContent="guest@portfolio:~$";
+        promptPrefix.classList.remove("text-red-500","text-yellow-400");
+        promptPrefix.classList.add("text-green-400");
+        terminalOutput.innerHTML='';initTerminal();
+    },1000);
+}
+
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+function printToTerminal(text,cssClass='text-gray-300'){
+    const p=document.createElement('p');
+    if(text&&text.includes('<span'))p.innerHTML=text;
+    else p.innerHTML=(text||'').replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    p.className=cssClass+' fade-in';terminalOutput.appendChild(p);
+}
+function scrollToBottom(){terminalOutput.scrollTop=terminalOutput.scrollHeight;}
+function initTerminal(){
+    let i=0;
+    function typeLine(){
+        if(i<welcomeMessage.length){printToTerminal(welcomeMessage[i]);i++;scrollToBottom();setTimeout(typeLine,150);}
+        else{printToTerminal(firstQuestion,'text-yellow-300');commandInput.focus();}
+    }
+    terminalOutput.innerHTML='';typeLine();
+}
+initTerminal();
+</script>
+</body>
+</html>
