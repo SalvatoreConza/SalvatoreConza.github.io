@@ -1,4 +1,4 @@
-# SalvatoreConza.github.io | Interactive Terminal Portfolio 🎮
+#🎮 Interactive Terminal Portfolio | SalvatoreConza.github.io 
 
 Welcome to my personal portfolio! This is a unique, interactive web experience built to resemble a retro terminal interface. You can view the live site here: [salvatoreconza.github.io](https://salvatoreconza.github.io)
 
